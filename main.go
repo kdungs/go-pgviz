@@ -39,6 +39,10 @@ func connect() (*sql.DB, error) {
 func main() {
 	flag.Parse()
 
+	if *pgDB == "" {
+		panic("You need to provide the database name using -db <name>")
+	}
+
 	db, err := connect()
 	if err != nil {
 		log.Fatalf("%v", err)
