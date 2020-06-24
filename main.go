@@ -4,40 +4,51 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"log"
+	"os"
 
 	_ "github.com/lib/pq"
 )
 
 var (
-	host = flag.String("host", "localhost", "Postgres hostname")
-	port = flag.Int("port", 5432, "Postgres port")
-	user = flag.String("user", "postgres", "Postgres username")
-	pass = flag.String("pass", "", "Postgres password")
-	db   = flag.String("db", "", "Postgres database")
+	pgHost        = flag.String("host", "localhost", "Postgres hostname")
+	pgPort        = flag.Int("port", 5432, "Postgres port")
+	pgUser        = flag.String("user", "postgres", "Postgres username")
+	pgPass        = flag.String("pass", "", "Postgres password")
+	pgDB          = flag.String("db", "", "Postgres database")
+	showColumns   = flag.Bool("show-columns", false, "whether to show columns for each table")
+	showRelations = flag.Bool("show-relations", true, "whether to show relationships between tables (based on foreign keys)")
 )
+
+func connect() (*sql.DB, error) {
+	connstr := fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s",
+		*pgHost,
+		*pgPort,
+		*pgUser,
+		*pgPass,
+		*pgDB,
+	)
+	return sql.Open("postgres", connstr)
+}
 
 func main() {
 	flag.Parse()
-	psqlInfo := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s",
-		*host,
-		*port,
-		*user,
-		*pass,
-		*db,
-	)
 
-	db, err := sql.Open("postgres", psqlInfo)
+	db, err := connect()
 	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	tables, err := ListTables(db, true)
-	if err != nil {
-		panic(err)
+		log.Fatalf("%v", err)
 	}
 
-	graph := BuildDependencies(tables)
-	fmt.Println(DrawGraphviz(graph))
+	tables, err := ListTables(db, ListTablesOptions{
+		LoadColumns:     *showColumns,
+		LoadForeignKeys: *showRelations,
+	})
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	if err := RenderGraphviz(os.Stdout, tables); err != nil {
+		log.Fatalf("%v", err)
+	}
 }

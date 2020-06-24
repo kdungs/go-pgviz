@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"regexp"
 )
 
@@ -49,9 +50,12 @@ func ListForeignKeys(db *sql.DB, tableName string) ([]ForeignKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	// In case we get an error during scanning.
-	// TODO(kdungs): Figure out if this is needed.
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}()
+
 	keys := make([]ForeignKey, 0)
 	for rows.Next() {
 		var key ForeignKey
@@ -59,6 +63,9 @@ func ListForeignKeys(db *sql.DB, tableName string) ([]ForeignKey, error) {
 			return nil, err
 		}
 		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return keys, nil
 }

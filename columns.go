@@ -1,6 +1,9 @@
 package main
 
-import "database/sql"
+import (
+	"database/sql"
+	"log"
+)
 
 // ColumnsQuery is used to get all columns for a specific table.
 const ColumnsQuery = `
@@ -13,7 +16,7 @@ WHERE table_name = $1
 type Column struct {
 	Name       string
 	Type       string
-	IsNullable string
+	IsNullable bool
 }
 
 // ListColumns fetches all columns for a given table.
@@ -22,17 +25,24 @@ func ListColumns(db *sql.DB, tableName string) ([]Column, error) {
 	if err != nil {
 		return nil, err
 	}
-	// In case we get an error during scanning.
-	// TODO(kdungs): Figure out if this is needed.
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}()
 
 	cs := make([]Column, 0)
 	for rows.Next() {
 		var c Column
-		if err := rows.Scan(&c.Name, &c.Type, &c.IsNullable); err != nil {
+		var isnull string
+		if err := rows.Scan(&c.Name, &c.Type, &isnull); err != nil {
 			return nil, err
 		}
+		c.IsNullable = (isnull == "YES")
 		cs = append(cs, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return cs, nil
 }

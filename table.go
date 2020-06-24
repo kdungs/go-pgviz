@@ -1,6 +1,9 @@
 package main
 
-import "database/sql"
+import (
+	"database/sql"
+	"log"
+)
 
 // TableNamesQuery is used to get all table names for the public schema.
 const TableNamesQuery = `
@@ -8,6 +11,7 @@ SELECT table_name
 FROM information_schema.tables
 WHERE table_type = 'BASE TABLE'
 AND table_schema = 'public'
+ORDER BY table_name ASC
 `
 
 // Table represents a database table.
@@ -37,28 +41,26 @@ func (t *Table) LoadForeignKeys(db *sql.DB) error {
 	return nil
 }
 
-// Load loads all additional information for the given table.
-func (t *Table) Load(db *sql.DB) error {
-	if err := t.LoadColumns(db); err != nil {
-		return err
-	}
-	if err := t.LoadForeignKeys(db); err != nil {
-		return err
-	}
-	return nil
+// ListTablesOptions contains options for loading table information from the
+// database.
+type ListTablesOptions struct {
+	LoadColumns     bool
+	LoadForeignKeys bool
 }
 
 // ListTables lists all tables in the database (public schema).
-// If full is set to true, additional information like columns and foreign keys
-// is loaded as well.
-func ListTables(db *sql.DB, full bool) ([]Table, error) {
+// Depending on the ListTableOptions, additional information (columns, foreign
+// keys) is loaded.
+func ListTables(db *sql.DB, options ListTablesOptions) ([]Table, error) {
 	rows, err := db.Query(TableNamesQuery)
 	if err != nil {
 		return nil, err
 	}
-	// In case we get an error during scanning.
-	// TODO(kdungs): Figure out if this is needed.
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Fatalf("%v", err)
+		}
+	}()
 
 	tables := make([]Table, 0)
 	for rows.Next() {
@@ -67,12 +69,20 @@ func ListTables(db *sql.DB, full bool) ([]Table, error) {
 			return nil, err
 		}
 		t := Table{Name: name}
-		if full {
-			if err := t.Load(db); err != nil {
+		if options.LoadColumns {
+			if err := t.LoadColumns(db); err != nil {
+				return nil, err
+			}
+		}
+		if options.LoadForeignKeys {
+			if err := t.LoadForeignKeys(db); err != nil {
 				return nil, err
 			}
 		}
 		tables = append(tables, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return tables, nil
 }
