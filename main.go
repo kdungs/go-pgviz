@@ -16,6 +16,7 @@ var (
 	pgUser        = flag.String("user", "postgres", "Postgres username")
 	pgPass        = flag.String("pass", "", "Postgres password")
 	pgDB          = flag.String("db", "", "Postgres database")
+	pgNoSSL       = flag.Bool("no-ssl", false, "Disable ssl")
 	showColumns   = flag.Bool("show-columns", false, "whether to show columns for each table")
 	showRelations = flag.Bool("show-relations", true, "whether to show relationships between tables (based on foreign keys)")
 )
@@ -29,11 +30,18 @@ func connect() (*sql.DB, error) {
 		*pgPass,
 		*pgDB,
 	)
+	if *pgNoSSL {
+		connstr += " sslmode=disable"
+	}
 	return sql.Open("postgres", connstr)
 }
 
 func main() {
 	flag.Parse()
+
+	if *pgDB == "" {
+		panic("You need to provide the database name using -db <name>")
+	}
 
 	db, err := connect()
 	if err != nil {
